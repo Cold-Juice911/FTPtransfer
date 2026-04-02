@@ -10,16 +10,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static frontend files
-app.use(express.static(path.join(__dirname, "..", "public")));
+const clientPath = path.join(__dirname, "..", "..", "Client", "dist");
+app.use(express.static(clientPath));
 
 // API routes
 app.use("/api", apiRoutes);
 
 // Fallback to index.html
 app.get("/{*path}", (_req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+  res.sendFile(path.join(clientPath, "index.html"));
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 FTP Transfer Server running at http://localhost:${PORT}\n`);
+  console.log(`\n🚀 Backend Server running at http://localhost:${PORT}\n`);
 });

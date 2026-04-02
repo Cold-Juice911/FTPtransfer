@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="FTP Transfer Client — Upload images to your Hostinger server and get public URLs instantly." />
-  <title>FTP Transfer Client</title>
+  <meta name="description" content="SFTP Transfer Client — Upload images to your Hostinger server and get public URLs instantly." />
+  <title>SFTP Transfer Client</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -21,40 +21,79 @@
       <div class="card__header">
         <div class="card__icon">🔗</div>
         <div>
-          <h2 class="card__title">FTP Connection</h2>
-          <p class="card__description">Enter your Hostinger FTP credentials</p>
+          <h2 class="card__title">SFTP Connection</h2>
+          <p class="card__description">Enter your Hostinger SFTP credentials</p>
         </div>
       </div>
       <form id="credentials-form" autocomplete="off">
         <div class="form-grid">
           <div class="form-group">
-            <label class="form-label" for="ftp-host">FTP Hostname / IP</label>
+            <label class="form-label" for="ftp-host">SFTP Hostname / IP</label>
             <input class="form-input" type="text" id="ftp-host" placeholder="123.234.456.87" required />
           </div>
           <div class="form-group">
             <label class="form-label" for="ftp-port">Port</label>
-            <input class="form-input" type="number" id="ftp-port" placeholder="21" value="21" required />
+            <input class="form-input" type="number" id="ftp-port" placeholder="21 / 22 / 65002" value="" required />
           </div>
           <div class="form-group">
             <label class="form-label" for="ftp-user">Username</label>
-            <input class="form-input" type="text" id="ftp-user" placeholder="FTP username" required />
+            <input class="form-input" type="text" id="ftp-user" placeholder="SFTP username" required />
           </div>
           <div class="form-group">
             <label class="form-label" for="ftp-password">Password</label>
-            <input class="form-input" type="password" id="ftp-password" placeholder="FTP password" required />
+            <input class="form-input" type="password" id="ftp-password" placeholder="SFTP password" required />
           </div>
-          <div class="form-group">
+          <div class="form-group form-group--full">
             <label class="form-label" for="ftp-domain">Hostinger File URL</label>
             <input class="form-input" type="text" id="ftp-domain" placeholder="srv1990-files.hstgr.io/.../public_html" required />
             <span class="form-hint" style="line-height: 1.4; display: block; margin-top: 4px;">Paste your exact Hostinger path (e.g. srv1990-files.hstgr.io/.../public_html)</span>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="ftp-folder">Folder Name</label>
-            <input class="form-input" type="text" id="ftp-folder" placeholder="e.g. cats" required />
-            <span class="form-hint">Folder inside public_html (e.g. cats, dogs, uploads)</span>
-          </div>
         </div>
       </form>
+    </section>
+
+    <!-- Folder Browser Card -->
+    <section class="card" id="browser-card">
+      <div class="card__header">
+        <div class="card__icon">📁</div>
+        <div>
+          <h2 class="card__title">Folder Browser</h2>
+          <p class="card__description">Browse, manage, and delete folders & files on your server</p>
+        </div>
+        <button class="btn btn--secondary btn--sm" id="fetch-folders-btn" type="button">
+          <span>🔄</span> Fetch Folders
+        </button>
+      </div>
+
+      <div id="folder-browser-status" class="status-bar"></div>
+
+      <!-- Folder list -->
+      <div id="folder-list-container" class="folder-list-container" style="display: none;">
+        <div class="folder-list-header">
+          <span class="folder-list-header__title">📂 public_html</span>
+          <span class="folder-list-header__hint">Double-click a folder to open</span>
+        </div>
+        <ul id="folder-list" class="folder-list"></ul>
+      </div>
+
+      <!-- Open folder view -->
+      <div id="open-folder-view" class="open-folder-view" style="display: none;">
+        <div class="open-folder-header">
+          <button class="btn btn--ghost btn--sm" id="back-to-folders-btn" type="button">← Back</button>
+          <span class="open-folder-header__name" id="open-folder-name"></span>
+          <div class="open-folder-header__actions">
+            <button class="btn btn--ghost btn--sm" id="refresh-folder-btn" type="button" title="Refresh files">🔄 Refresh</button>
+            <button class="btn btn--danger btn--sm" id="delete-folder-btn" type="button" title="Delete this folder">🗑️ Delete Folder</button>
+          </div>
+        </div>
+        <div id="folder-files-status" class="status-bar"></div>
+        <div id="folder-files-container">
+          <div class="empty-state" id="folder-empty-state">
+            <span class="empty-state__icon">📭</span>
+            <p class="empty-state__text">This folder is empty</p>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- Upload Card -->
@@ -63,7 +102,21 @@
         <div class="card__icon">📤</div>
         <div>
           <h2 class="card__title">Upload Images</h2>
-          <p class="card__description">Drag &amp; drop or browse to select images</p>
+          <p class="card__description">Drag & drop or browse to select images</p>
+        </div>
+      </div>
+
+      <!-- Folder selection -->
+      <div class="form-group" style="margin-bottom: 20px;">
+        <label class="form-label" for="upload-folder-select">Destination Folder</label>
+        <div class="folder-select-row">
+          <select class="form-input form-select" id="upload-folder-select">
+            <option value="" disabled selected>Select a folder...</option>
+            <option value="__new__">➕ Create New Folder</option>
+          </select>
+          <div class="new-folder-input-row" id="new-folder-row" style="display: none;">
+            <input class="form-input" type="text" id="new-folder-input" placeholder="New folder name" />
+          </div>
         </div>
       </div>
 
@@ -89,31 +142,23 @@
         <button class="btn btn--primary" id="upload-btn" type="button" disabled>
           <span>📤</span> Upload Files
         </button>
-        <button class="btn btn--secondary" id="get-files-btn" type="button">
-          <span>📂</span> Get All Files
-        </button>
-      </div>
-    </section>
-
-    <!-- Results Card -->
-    <section class="card" id="results-card">
-      <div class="card__header">
-        <div class="card__icon">🌐</div>
-        <div>
-          <h2 class="card__title">Public URLs</h2>
-          <p class="card__description">Your uploaded images with shareable links</p>
-        </div>
-      </div>
-
-      <div id="results-container">
-        <div class="empty-state" id="empty-state">
-          <span class="empty-state__icon">📭</span>
-          <p class="empty-state__text">No files yet — upload images or fetch existing ones</p>
-        </div>
       </div>
     </section>
 
   </div>
-  <script src="app.js?v=2"></script>
+
+  <!-- Confirmation Modal -->
+  <div class="modal-overlay" id="confirm-modal" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-card__icon">⚠️</div>
+      <p class="modal-card__message" id="confirm-modal-message">Are you sure?</p>
+      <div class="modal-card__actions">
+        <button class="btn btn--secondary btn--sm" id="confirm-modal-cancel" type="button">Cancel</button>
+        <button class="btn btn--danger btn--sm" id="confirm-modal-confirm" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=3"></script>
 </body>
 </html>
