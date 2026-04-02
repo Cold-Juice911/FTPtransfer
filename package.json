@@ -1,25 +1,35 @@
 {
   "name": "ftptransfer",
   "version": "1.0.0",
-  "description": "",
-  "main": "dist/server.js",
+  "description": "A full-stack, lightweight web client built to seamlessly transfer images from your local machine to your remote FTP server (specifically tailored to bypass Hostinger Website Builder/CMS routing issues). It auto-generates immediately usable, public-facing URLs.",
+  "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "concurrently \"npm run dev:backend\" \"npm run dev:client\"",
+    "dev:backend": "cd Backend && npm run dev",
+    "dev:client": "cd Client && npm run dev",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cold-Juice911/FTPtransfer.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Cold-Juice911/FTPtransfer/issues"
+  },
+  "homepage": "https://github.com/Cold-Juice911/FTPtransfer#readme",
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.2.2"
+  },
   "dependencies": {
-    "@types/express": "^5.0.6",
-    "@types/multer": "^2.1.0",
-    "@types/node": "^25.5.0",
-    "basic-ftp": "^5.2.0",
-    "express": "^5.2.1",
-    "multer": "^2.1.1",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.7.0",
+    "tailwind-merge": "^3.5.0"
   }
 }
