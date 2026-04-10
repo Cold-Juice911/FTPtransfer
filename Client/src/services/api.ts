@@ -7,13 +7,15 @@ import {
   RenameResponse,
 } from "../types";
 
+const API_BASE_URL = "https://ftptransfer-demos.onrender.com";
+
 const headers = {
   "Content-Type": "application/json",
 };
 
 export class ApiService {
   static async fetchFolders(credentials: SftpCredentials): Promise<FoldersResponse> {
-    const res = await fetch("/api/folders", {
+    const res = await fetch(`${API_BASE_URL}/api/folders`, {
       method: "POST",
       headers,
       body: JSON.stringify(credentials),
@@ -22,7 +24,7 @@ export class ApiService {
   }
 
   static async fetchFiles(credentials: SftpCredentials & { folder: string }): Promise<FilesResponse> {
-    const res = await fetch("/api/files", {
+    const res = await fetch(`${API_BASE_URL}/api/files`, {
       method: "POST",
       headers,
       body: JSON.stringify(credentials),
@@ -61,13 +63,13 @@ export class ApiService {
       
       xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
       
-      xhr.open("POST", "/api/upload");
+      xhr.open("POST", `${API_BASE_URL}/api/upload`);
       xhr.send(formData);
     });
   }
 
   static async deleteFile(credentials: SftpCredentials & { folder: string }, filename: string): Promise<DeleteResponse> {
-    const res = await fetch("/api/file", {
+    const res = await fetch(`${API_BASE_URL}/api/file`, {
       method: "DELETE",
       headers,
       body: JSON.stringify({ ...credentials, filename }),
@@ -76,7 +78,7 @@ export class ApiService {
   }
 
   static async deleteFolder(credentials: SftpCredentials, folderName: string): Promise<DeleteResponse> {
-    const res = await fetch("/api/folder", {
+    const res = await fetch(`${API_BASE_URL}/api/folder`, {
       method: "DELETE",
       headers,
       body: JSON.stringify({ ...credentials, folderName }),
@@ -85,7 +87,7 @@ export class ApiService {
   }
 
   static async renameFolder(credentials: SftpCredentials, oldName: string, newName: string): Promise<RenameResponse> {
-    const res = await fetch("/api/folder", {
+    const res = await fetch(`${API_BASE_URL}/api/folder`, {
       method: "PATCH",
       headers,
       body: JSON.stringify({ ...credentials, oldName, newName }),
@@ -94,7 +96,7 @@ export class ApiService {
   }
 
   static async renameFile(credentials: SftpCredentials & { folder: string }, oldName: string, newName: string): Promise<RenameResponse> {
-    const res = await fetch("/api/file", {
+    const res = await fetch(`${API_BASE_URL}/api/file`, {
       method: "PATCH",
       headers,
       body: JSON.stringify({ ...credentials, oldName, newName }),

@@ -9,6 +9,8 @@ import {
   CreateFolderResponse,
 } from "../types";
 
+const API_BASE_URL = "https://ftptransfer-demos.onrender.com";
+
 const headers = {
   "Content-Type": "application/json",
 };
@@ -20,7 +22,7 @@ const headers = {
  */
 export class GoDaddyApiService {
   static async fetchFolders(credentials: SftpCredentials): Promise<FoldersResponse> {
-    const res = await fetch("/api/godaddy/folders", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/folders`, {
       method: "POST",
       headers,
       body: JSON.stringify(credentials),
@@ -29,7 +31,7 @@ export class GoDaddyApiService {
   }
 
   static async fetchFiles(credentials: SftpCredentials & { folder: string }): Promise<FilesResponse> {
-    const res = await fetch("/api/godaddy/files", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/files`, {
       method: "POST",
       headers,
       body: JSON.stringify(credentials),
@@ -72,13 +74,13 @@ export class GoDaddyApiService {
 
       xhr.addEventListener("error", () => reject(new Error("Network error during upload")));
 
-      xhr.open("POST", "/api/godaddy/upload");
+      xhr.open("POST", `${API_BASE_URL}/api/godaddy/upload`);
       xhr.send(formData);
     });
   }
 
   static async createFolder(credentials: SftpCredentials, folderName: string): Promise<CreateFolderResponse> {
-    const res = await fetch("/api/godaddy/create-folder", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/create-folder`, {
       method: "POST",
       headers,
       body: JSON.stringify({ ...credentials, folderName }),
@@ -90,7 +92,7 @@ export class GoDaddyApiService {
     credentials: SftpCredentials & { folder: string },
     filename: string
   ): Promise<DeleteResponse> {
-    const res = await fetch("/api/godaddy/file", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/file`, {
       method: "DELETE",
       headers,
       body: JSON.stringify({ ...credentials, filename }),
@@ -99,7 +101,7 @@ export class GoDaddyApiService {
   }
 
   static async deleteFolder(credentials: SftpCredentials, folderName: string): Promise<DeleteResponse> {
-    const res = await fetch("/api/godaddy/folder", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/folder`, {
       method: "DELETE",
       headers,
       body: JSON.stringify({ ...credentials, folderName }),
@@ -112,7 +114,7 @@ export class GoDaddyApiService {
     oldName: string,
     newName: string
   ): Promise<RenameResponse> {
-    const res = await fetch("/api/godaddy/folder", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/folder`, {
       method: "PATCH",
       headers,
       body: JSON.stringify({ ...credentials, oldName, newName }),
@@ -125,7 +127,7 @@ export class GoDaddyApiService {
     oldName: string,
     newName: string
   ): Promise<RenameResponse> {
-    const res = await fetch("/api/godaddy/file", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/file`, {
       method: "PATCH",
       headers,
       body: JSON.stringify({ ...credentials, oldName, newName }),
@@ -139,7 +141,7 @@ export class GoDaddyApiService {
     targetFolder: string,
     filename: string
   ): Promise<MoveFileResponse> {
-    const res = await fetch("/api/godaddy/move-file", {
+    const res = await fetch(`${API_BASE_URL}/api/godaddy/move-file`, {
       method: "POST",
       headers,
       body: JSON.stringify({ ...credentials, sourceFolder, targetFolder, filename }),
@@ -154,7 +156,7 @@ export class GoDaddyApiService {
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/godaddy/download");
+      xhr.open("POST", `${API_BASE_URL}/api/godaddy/download`);
       xhr.setRequestHeader("Content-Type", "application/json");
       xhr.responseType = "blob";
 
