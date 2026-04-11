@@ -13,6 +13,8 @@ import {
   Pencil,
   Clock,
   Sparkles,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { ApiService } from '../services/api';
 import { SftpCredentials, FolderEntry, FileEntry } from '../types';
@@ -55,6 +57,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
   // Selection state
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Rename state
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
@@ -323,15 +326,35 @@ export const FolderBrowserCard: React.FC<Props> = ({
             </h2>
           </div>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="flex items-center gap-1.5 bg-background border border-taupe-200 hover:bg-taupe-100 text-text px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-          title="Refresh"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          <span className="hidden sm:inline">Refresh</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-xl border border-taupe-200 bg-background overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`p-2 text-text transition-colors ${viewMode === 'grid' ? 'bg-primary/10 text-primary' : 'hover:bg-taupe-100'}`}
+              title="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`p-2 text-text transition-colors ${viewMode === 'list' ? 'bg-primary/10 text-primary' : 'hover:bg-taupe-100'}`}
+              title="List view"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 bg-background border border-taupe-200 hover:bg-taupe-100 text-text px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Search Bar ── */}
@@ -382,101 +405,182 @@ export const FolderBrowserCard: React.FC<Props> = ({
               <div className="text-center py-10 text-text-muted text-sm">Loading folders...</div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {filteredFolders.map((f) => {
-                const isSelected = selectedFolder === f.name;
-                const isRenaming = renamingFolder === f.name;
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {filteredFolders.map((f) => {
+                  const isSelected = selectedFolder === f.name;
+                  const isRenaming = renamingFolder === f.name;
 
-                return (
-                  <div
-                    key={f.name}
-                    data-item-card
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isRenaming) {
-                        setSelectedFolder(isSelected ? null : f.name);
-                        if (renamingFolder && renamingFolder !== f.name) setRenamingFolder(null);
-                      }
-                    }}
-                    onDoubleClick={() => {
-                      if (!isRenaming) handleOpenFolder(f.name);
-                    }}
-                    className={`relative flex flex-col items-center mx-1 px-2.5 py-3 my-1 rounded-xl border cursor-pointer transition-all duration-150 group
-                      ${
-                        isSelected
-                          ? 'item-card-selected border-primary/40 bg-primary/5'
-                          : 'border-taupe-200 bg-background hover:border-primary/30 hover:bg-taupe-50'
-                      }`}
-                  >
-                    <FolderIcon
-                      className="w-8 h-8 text-primary mb-1.5"
-                      fill="currentColor"
-                      fillOpacity={0.15}
-                    />
+                  return (
+                    <div
+                      key={f.name}
+                      data-item-card
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isRenaming) {
+                          setSelectedFolder(isSelected ? null : f.name);
+                          if (renamingFolder && renamingFolder !== f.name) setRenamingFolder(null);
+                        }
+                      }}
+                      onDoubleClick={() => {
+                        if (!isRenaming) handleOpenFolder(f.name);
+                      }}
+                      className={`relative flex flex-col items-center mx-1 px-2.5 py-3 my-1 rounded-xl border cursor-pointer transition-all duration-150 group
+                        ${
+                          isSelected
+                            ? 'item-card-selected border-primary/40 bg-primary/5'
+                            : 'border-taupe-200 bg-background hover:border-primary/30 hover:bg-taupe-50'
+                        }`}
+                    >
+                      <FolderIcon
+                        className="w-8 h-8 text-primary mb-1.5"
+                        fill="currentColor"
+                        fillOpacity={0.15}
+                      />
 
-                    {isRenaming ? (
-                      <div className="flex items-center gap-1 w-full" data-item-action>
-                        <input
-                          ref={renameInputRef}
-                          type="text"
-                          value={renameFolderValue}
-                          onChange={(e) => setRenameFolderValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleRenameFolder();
-                            if (e.key === 'Escape') setRenamingFolder(null);
-                          }}
-                          className="flex-1 min-w-0 text-xs bg-white border border-primary/40 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <button
-                          data-item-action
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRenameFolder();
-                          }}
-                          className="p-0.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                          title="Save"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </button>
+                      {isRenaming ? (
+                        <div className="flex items-center gap-1 w-full" data-item-action>
+                          <input
+                            ref={renameInputRef}
+                            type="text"
+                            value={renameFolderValue}
+                            onChange={(e) => setRenameFolderValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRenameFolder();
+                              if (e.key === 'Escape') setRenamingFolder(null);
+                            }}
+                            className="flex-1 min-w-0 text-xs bg-white border border-primary/40 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <button
+                            data-item-action
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRenameFolder();
+                            }}
+                            className="p-0.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                            title="Save"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs font-medium text-text truncate w-full text-center" title={f.name}>
+                          {f.name}
+                        </span>
+                      )}
+
+                      {isSelected && !isRenaming && (
+                        <div className="flex items-center gap-1.5 mt-1.5 w-full justify-center" data-item-action>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startRenamingFolder(f.name);
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            title="Rename"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span className="text-[10px] font-semibold tracking-wide">Rename</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFolder(f.name);
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span className="text-[10px] font-semibold tracking-wide">Delete</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredFolders.map((f) => {
+                  const isSelected = selectedFolder === f.name;
+                  const isRenaming = renamingFolder === f.name;
+
+                  return (
+                    <div
+                      key={f.name}
+                      data-item-card
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isRenaming) {
+                          setSelectedFolder(isSelected ? null : f.name);
+                          if (renamingFolder && renamingFolder !== f.name) setRenamingFolder(null);
+                        }
+                      }}
+                      onDoubleClick={() => {
+                        if (!isRenaming) handleOpenFolder(f.name);
+                      }}
+                      className={`relative flex items-center gap-3 px-3 py-3 rounded-xl border cursor-pointer transition-all duration-150
+                        ${
+                          isSelected
+                            ? 'item-card-selected border-primary/40 bg-primary/5'
+                            : 'border-taupe-200 bg-background hover:border-primary/30 hover:bg-taupe-50'
+                        }`}
+                    >
+                      <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-taupe-100 text-primary">
+                        <FolderIcon className="w-6 h-6" />
                       </div>
-                    ) : (
-                      <span className="text-xs font-medium text-text truncate w-full text-center" title={f.name}>
-                        {f.name}
-                      </span>
-                    )}
-
-                    {/* Action buttons on selection */}
-                    {isSelected && !isRenaming && (
-                      <div className="flex items-center gap-1.5 mt-1.5 w-full justify-center" data-item-action>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startRenamingFolder(f.name);
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                          title="Rename"
-                        >
-                          <Pencil className="w-3 h-3" />
-                          <span className="text-[10px] font-semibold tracking-wide">Rename</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteFolder(f.name);
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span className="text-[10px] font-semibold tracking-wide">Delete</span>
-                        </button>
+                      <div className="min-w-0 flex-1">
+                        {isRenaming ? (
+                          <div className="flex items-center gap-1" data-item-action>
+                            <input
+                              ref={renameInputRef}
+                              type="text"
+                              value={renameFolderValue}
+                              onChange={(e) => setRenameFolderValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameFolder();
+                                if (e.key === 'Escape') setRenamingFolder(null);
+                              }}
+                              className="w-full text-sm bg-white border border-primary/40 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-sm font-medium text-text truncate" title={f.name}>
+                            {f.name}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      {isSelected && !isRenaming && (
+                        <div className="flex items-center gap-2" data-item-action>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startRenamingFolder(f.name);
+                            }}
+                            className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            title="Rename"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFolder(f.name);
+                            }}
+                            className="p-2 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {searchQuery && filteredFolders.length === 0 && folders.length > 0 && (
               <div className="text-center py-6 text-text-muted text-xs">
@@ -502,154 +606,268 @@ export const FolderBrowserCard: React.FC<Props> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {filteredFiles.map((f) => {
-                const isSelected = selectedFile === f.name;
-                const isRenaming = renamingFile === f.name;
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {filteredFiles.map((f) => {
+                  const isSelected = selectedFile === f.name;
+                  const isRenaming = renamingFile === f.name;
 
-                return (
-                  <div
-                    key={f.name}
-                    data-item-card
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isRenaming) {
-                        setSelectedFile(isSelected ? null : f.name);
-                        if (renamingFile && renamingFile !== f.name) setRenamingFile(null);
-                      }
-                    }}
-                    className={`group relative flex flex-col items-center p-2.5 m-1 rounded-xl border cursor-pointer transition-all duration-150
-                      ${
-                        isSelected
-                          ? 'item-card-selected border-primary/40 bg-primary/5'
-                          : 'border-taupe-200 bg-background hover:border-primary/30 hover:bg-taupe-50'
-                      }`}
-                  >
-                    {/* Thumbnail */}
-                    <div className="relative w-full aspect-square rounded-lg bg-taupe-50 border border-taupe-200 overflow-hidden mb-1.5 flex items-center justify-center">
-                      
-                      {/* Hover Copy Button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(f.url);
-                        }}
-                        className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm border border-taupe-200 shadow-sm px-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 z-10 hover:bg-background text-text"
-                        title="Copy URL"
-                      >
-                        {copiedUrl === f.url ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5 text-primary" />}
-                        <span className="text-[10px] font-bold">Copy URL</span>
-                      </button>
-                      <img
-                        src={f.url}
-                        alt={f.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          // Show fallback icon
-                          const parent = e.currentTarget.parentElement;
-                          if (parent && !parent.querySelector('.fallback-icon')) {
-                            const fallback = document.createElement('div');
-                            fallback.className = 'fallback-icon flex items-center justify-center w-full h-full';
-                            fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#bbb09b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`;
-                            parent.appendChild(fallback);
-                          }
-                        }}
-                      />
-                    </div>
-
-                    {/* New badge for files uploaded in last 24 hours */}
-                    {f.modifiedAt && (Date.now() - f.modifiedAt < 24 * 60 * 60 * 1000) && (
-                      <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-0.5 bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
-                        <Sparkles className="w-2.5 h-2.5" />
-                        New
-                      </div>
-                    )}
-
-                    {isRenaming ? (
-                      <div className="flex items-center gap-1 w-full" data-item-action>
-                        <input
-                          ref={renameInputRef}
-                          type="text"
-                          value={renameFileValue}
-                          onChange={(e) => setRenameFileValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleRenameFile();
-                            if (e.key === 'Escape') setRenamingFile(null);
+                  return (
+                    <div
+                      key={f.name}
+                      data-item-card
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isRenaming) {
+                          setSelectedFile(isSelected ? null : f.name);
+                          if (renamingFile && renamingFile !== f.name) setRenamingFile(null);
+                        }
+                      }}
+                      className={`group relative flex flex-col items-center p-2.5 m-1 rounded-xl border cursor-pointer transition-all duration-150
+                        ${
+                          isSelected
+                            ? 'item-card-selected border-primary/40 bg-primary/5'
+                            : 'border-taupe-200 bg-background hover:border-primary/30 hover:bg-taupe-50'
+                        }`}
+                    >
+                      {/* Thumbnail */}
+                      <div className="relative w-full aspect-square rounded-lg bg-taupe-50 border border-taupe-200 overflow-hidden mb-1.5 flex items-center justify-center">
+                        {/* Hover Copy Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(f.url);
                           }}
-                          className="flex-1 min-w-0 text-[10px] bg-white border border-primary/40 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
-                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm border border-taupe-200 shadow-sm px-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 z-10 hover:bg-background text-text"
+                          title="Copy URL"
+                        >
+                          {copiedUrl === f.url ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5 text-primary" />}
+                          <span className="text-[10px] font-bold">Copy URL</span>
+                        </button>
+                        <img
+                          src={f.url}
+                          alt={f.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const parent = e.currentTarget.parentElement;
+                            if (parent && !parent.querySelector('.fallback-icon')) {
+                              const fallback = document.createElement('div');
+                              fallback.className = 'fallback-icon flex items-center justify-center w-full h-full';
+                              fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#bbb09b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`;
+                              parent.appendChild(fallback);
+                            }
+                          }}
                         />
-                        <button
-                          data-item-action
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRenameFile();
-                          }}
-                          className="p-0.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                          title="Save"
-                        >
-                          <Check className="w-3 h-3" />
-                        </button>
                       </div>
-                    ) : (
-                      <span
-                        className="text-[10px] font-medium text-text truncate w-full text-center leading-tight"
-                        title={f.name}
-                      >
-                        {f.name}
-                      </span>
-                    )}
 
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className="text-[9px] text-text-muted">
-                        {(f.size / 1024).toFixed(1)} KB
-                      </span>
+                      {f.modifiedAt && (Date.now() - f.modifiedAt < 24 * 60 * 60 * 1000) && (
+                        <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-0.5 bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                          <Sparkles className="w-2.5 h-2.5" />
+                          New
+                        </div>
+                      )}
+
+                      {isRenaming ? (
+                        <div className="flex items-center gap-1 w-full" data-item-action>
+                          <input
+                            ref={renameInputRef}
+                            type="text"
+                            value={renameFileValue}
+                            onChange={(e) => setRenameFileValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleRenameFile();
+                              if (e.key === 'Escape') setRenamingFile(null);
+                            }}
+                            className="flex-1 min-w-0 text-[10px] bg-white border border-primary/40 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <button
+                            data-item-action
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRenameFile();
+                            }}
+                            className="p-0.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                            title="Save"
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span
+                          className="text-[10px] font-medium text-text truncate w-full text-center leading-tight"
+                          title={f.name}
+                        >
+                          {f.name}
+                        </span>
+                      )}
+
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span className="text-[9px] text-text-muted">
+                          {(f.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                      {f.modifiedAt > 0 && (
+                        <div className="flex items-center gap-0.5 mt-0.5" title={new Date(f.modifiedAt).toLocaleString()}>
+                          <Clock className="w-2.5 h-2.5 text-text-muted" />
+                          <span className="text-[8px] text-text-muted">
+                            {new Date(f.modifiedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                          <span className="text-[8px] text-text-muted">
+                            {new Date(f.modifiedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                        </div>
+                      )}
+
+                      {isSelected && !isRenaming && (
+                        <div className="flex items-center gap-1.5 mt-1 w-full justify-center" data-item-action>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startRenamingFile(f.name);
+                            }}
+                            className="flex items-center gap-1 px-1.5 py-1 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                            title="Rename"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            <span className="text-[10px] font-semibold tracking-wide">Rename</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFile(f.name);
+                            }}
+                            className="flex items-center gap-1 px-1.5 py-1 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span className="text-[10px] font-semibold tracking-wide">Delete</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {f.modifiedAt > 0 && (
-                      <div className="flex items-center gap-0.5 mt-0.5" title={new Date(f.modifiedAt).toLocaleString()}>
-                        <Clock className="w-2.5 h-2.5 text-text-muted" />
-                        <span className="text-[8px] text-text-muted">
-                          {new Date(f.modifiedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </span>
-                        <span className="text-[8px] text-text-muted">
-                          {new Date(f.modifiedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                        </span>
-                      </div>
-                    )}
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredFiles.map((f) => {
+                  const isSelected = selectedFile === f.name;
+                  const isRenaming = renamingFile === f.name;
 
-                    {/* Action buttons on selection */}
-                    {isSelected && !isRenaming && (
-                      <div className="flex items-center gap-1.5 mt-1 w-full justify-center" data-item-action>
+                  return (
+                    <div
+                      key={f.name}
+                      data-item-card
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isRenaming) {
+                          setSelectedFile(isSelected ? null : f.name);
+                          if (renamingFile && renamingFile !== f.name) setRenamingFile(null);
+                        }
+                      }}
+                      className={`group relative flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all duration-150 bg-background
+                        ${
+                          isSelected
+                            ? 'item-card-selected border-primary/40 bg-primary/5'
+                            : 'border-taupe-200 hover:border-primary/30'
+                        }`}
+                    >
+                      <div className="relative flex-shrink-0 w-16 h-16 rounded-xl bg-taupe-50 border border-taupe-200 overflow-hidden flex items-center justify-center">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            startRenamingFile(f.name);
+                            copyToClipboard(f.url);
                           }}
-                          className="flex items-center gap-1 px-1.5 py-1 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
-                          title="Rename"
+                          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm border border-taupe-200 shadow-sm px-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 z-10 hover:bg-background text-text"
+                          title="Copy URL"
                         >
-                          <Pencil className="w-3 h-3" />
-                          <span className="text-[10px] font-semibold tracking-wide">Rename</span>
+                          {copiedUrl === f.url ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5 text-primary" />}
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteFile(f.name);
+                        <img
+                          src={f.url}
+                          alt={f.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const parent = e.currentTarget.parentElement;
+                            if (parent && !parent.querySelector('.fallback-icon')) {
+                              const fallback = document.createElement('div');
+                              fallback.className = 'fallback-icon flex items-center justify-center w-full h-full';
+                              fallback.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#bbb09b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`;
+                              parent.appendChild(fallback);
+                            }
                           }}
-                          className="flex items-center gap-1 px-1.5 py-1 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          <span className="text-[10px] font-semibold tracking-wide">Delete</span>
-                        </button>
+                        />
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="min-w-0 flex-1">
+                        {isRenaming ? (
+                          <div className="flex items-center gap-1 w-full" data-item-action>
+                            <input
+                              ref={renameInputRef}
+                              type="text"
+                              value={renameFileValue}
+                              onChange={(e) => setRenameFileValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameFile();
+                                if (e.key === 'Escape') setRenamingFile(null);
+                              }}
+                              className="w-full text-[10px] bg-white border border-primary/40 rounded px-1 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <div className="text-sm font-semibold text-text truncate" title={f.name}>
+                              {f.name}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-muted">
+                              <span>{(f.size / 1024).toFixed(1)} KB</span>
+                              {f.modifiedAt > 0 && (
+                                <span>{new Date(f.modifiedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1" data-item-action>
+                        {isSelected && !isRenaming ? (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startRenamingFile(f.name);
+                              }}
+                              className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                              title="Rename"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteFile(f.name);
+                              }}
+                              className="p-2 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="text-[8px] text-text-muted">
+                            {f.modifiedAt > 0 && new Date(f.modifiedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {searchQuery && filteredFiles.length === 0 && files.length > 0 && (
               <div className="text-center py-6 text-text-muted text-xs">
