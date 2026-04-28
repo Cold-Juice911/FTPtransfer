@@ -56,9 +56,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB per file
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB per file
   fileFilter: (_req, file, cb) => {
     const allowedMimeTypes = [
+      // Images
       "image/jpeg",
       "image/png",
       "image/gif",
@@ -66,7 +67,17 @@ const upload = multer({
       "image/svg+xml",
       "image/bmp",
       "image/tiff",
+      // Documents
       "application/pdf",
+      // Video
+      "video/mp4",
+      "video/x-msvideo",
+      "video/quicktime",
+      "video/x-ms-wmv",
+      "video/x-matroska",
+      "video/webm",
+      "video/mpeg",
+      "video/3gpp",
     ];
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
