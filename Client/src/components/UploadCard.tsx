@@ -132,8 +132,8 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
               <Upload className="w-5 h-5 text-primary" />
             </div>
             <p className="text-text font-medium text-sm mb-0.5">Drag files here or <span className="text-primary underline">browse</span></p>
-            <p className="text-text-muted text-[10px]">JPEG, PNG, GIF, WebP, SVG, PDF &#8226; Max 50 MB</p>
-            <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*,.pdf,application/pdf" onChange={handleFileChange} />
+            <p className="text-text-muted text-[10px]">JPEG, PNG, GIF, WebP, SVG, PDF, MP4 &#8226; Max 500 MB</p>
+            <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*,video/*,.pdf,application/pdf" onChange={handleFileChange} />
           </div>
         ) : (
           /* Compact layout when files are queued */
@@ -187,7 +187,7 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
               ))}
             </ul>
 
-            <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*,.pdf,application/pdf" onChange={handleFileChange} />
+            <input type="file" ref={fileInputRef} className="hidden" multiple accept="image/*,video/*,.pdf,application/pdf" onChange={handleFileChange} />
 
             {/* Compact drop zone for adding more */}
             <div

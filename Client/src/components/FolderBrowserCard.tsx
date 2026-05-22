@@ -289,9 +289,9 @@ export const FolderBrowserCard: React.FC<Props> = ({
   const filteredFolders = folders.filter((f) =>
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filteredFiles = files.filter((f) =>
-    f.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredFiles = files
+    .filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
 
   const isRefreshing = currentFolder ? filesLoading : loading;
 

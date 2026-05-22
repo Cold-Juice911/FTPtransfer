@@ -651,11 +651,13 @@ export const GoDaddyPage: React.FC<Props> = ({
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredFiles = files.filter((f) => {
-    const matchesSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = matchesFilter(f.name, activeFilter);
-    return matchesSearch && matchesType;
-  });
+  const filteredFiles = files
+    .filter((f) => {
+      const matchesSearch = f.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = matchesFilter(f.name, activeFilter);
+      return matchesSearch && matchesType;
+    })
+    .sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
 
   const isRefreshing = currentFolder ? filesLoading : loading;
 
