@@ -66,7 +66,10 @@ export async function validateFileContent(
     "application/x-7z-compressed",
   ];
 
-  const valid = allowedMimePatterns.includes(result.mime);
+  const valid =
+    allowedMimePatterns.includes(result.mime) ||
+    result.mime.startsWith("video/") ||
+    result.mime.startsWith("image/");
   return { valid, detectedMime: result.mime };
 }
 

@@ -9,7 +9,7 @@ import {
   CreateFolderResponse,
 } from "../types";
 
-const API_BASE_URL = "https://ftptransfer-demos.onrender.com";
+const API_BASE_URL = "";
 
 const headers = {
   "Content-Type": "application/json",

@@ -79,7 +79,11 @@ const upload = multer({
       "video/mpeg",
       "video/3gpp",
     ];
-    if (allowedMimeTypes.includes(file.mimetype)) {
+    if (
+      allowedMimeTypes.includes(file.mimetype) ||
+      file.mimetype.startsWith("video/") ||
+      file.mimetype.startsWith("image/")
+    ) {
       cb(null, true);
     } else {
       cb(new Error(`Unsupported file type: ${file.mimetype}`));
@@ -127,7 +131,11 @@ const gdUpload = multer({
       "application/zip", "application/x-rar-compressed",
       "application/x-7z-compressed",
     ];
-    if (allowedMimeTypes.includes(file.mimetype)) {
+    if (
+      allowedMimeTypes.includes(file.mimetype) ||
+      file.mimetype.startsWith("video/") ||
+      file.mimetype.startsWith("image/")
+    ) {
       cb(null, true);
     } else {
       cb(new Error(`Unsupported file type: ${file.mimetype}`));
