@@ -30,8 +30,8 @@ async function createSftpClient(credentials: SftpCredentials): Promise<SftpClien
  * Builds the remote directory path from the folder name.
  */
 function getRemoteDir(folder: string): string {
-  const clean = folder.replace(/[^a-zA-Z0-9_-]/g, "");
-  return path.posix.join(BASE_DIR, clean);
+  const parts = folder.split('/').map(part => part.replace(/[^a-zA-Z0-9_-]/g, ""));
+  return path.posix.join(BASE_DIR, parts.join('/'));
 }
 
 /**
@@ -40,11 +40,10 @@ function getRemoteDir(folder: string): string {
 function buildPublicUrl(credentials: SftpCredentials, folder: string, filename: string): string {
   const domain = credentials.domain.trim();
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const cleanFolder = folder.replace(/[^a-zA-Z0-9_-]/g, "");
   
-  // filename might contain slashes. Split and encode each part, then join back with slashes
+  const folderParts = folder.split('/').map(part => encodeURIComponent(part.replace(/[^a-zA-Z0-9_-]/g, ""))).join('/');
   const pathParts = filename.split('/').map(part => encodeURIComponent(part));
-  return `https://${cleanDomain}/uploads/${cleanFolder}/${pathParts.join('/')}`;
+  return `https://${cleanDomain}/uploads/${folderParts}/${pathParts.join('/')}`;
 }
 
 /**
@@ -144,17 +143,19 @@ export async function listFiles(
 }
 
 export async function listFolders(
-  credentials: SftpCredentials
+  credentials: SftpCredentials,
+  subfolder?: string
 ): Promise<FolderEntry[]> {
   const client = await createSftpClient(credentials);
 
   try {
-    const exists = await client.exists(BASE_DIR);
+    const targetDir = subfolder ? getRemoteDir(subfolder) : BASE_DIR;
+    const exists = await client.exists(targetDir);
     if (!exists) {
-      throw new Error("uploads directory does not exist on the server. Please create it first.");
+      return [];
     }
 
-    const listing = await client.list(BASE_DIR);
+    const listing = await client.list(targetDir);
 
     const folders: FolderEntry[] = listing
       .filter((item) => item.type === "d") // "d" = directory
@@ -277,6 +278,30 @@ export async function renameFile(
 
     await client.rename(oldPath, newPath);
     console.log(`[SFTP] Renamed file: ${oldPath} → ${newPath}`);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Creates an empty folder inside base directory.
+ */
+export async function createFolder(
+  credentials: SftpCredentials,
+  folderName: string
+): Promise<void> {
+  const client = await createSftpClient(credentials);
+
+  try {
+    const remoteDir = getRemoteDir(folderName);
+
+    const exists = await client.exists(remoteDir);
+    if (exists) {
+      throw new Error(`A folder named "${folderName}" already exists.`);
+    }
+
+    await client.mkdir(remoteDir, true);
+    console.log(`[SFTP] Created folder: ${remoteDir}`);
   } finally {
     await client.end();
   }

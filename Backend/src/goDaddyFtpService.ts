@@ -171,17 +171,19 @@ export async function listFiles(
  * Lists all folders inside the base directory.
  */
 export async function listFolders(
-  credentials: SftpCredentials
+  credentials: SftpCredentials,
+  subfolder?: string
 ): Promise<FolderEntry[]> {
   const client = await createSftpClient(credentials);
 
   try {
-    const exists = await client.exists(GODADDY_BASE_DIR);
+    const targetDir = subfolder ? getRemoteDir(subfolder) : GODADDY_BASE_DIR;
+    const exists = await client.exists(targetDir);
     if (!exists) {
-      throw new Error("Base directory does not exist on the server. Please create it first.");
+      return [];
     }
 
-    const listing = await client.list(GODADDY_BASE_DIR);
+    const listing = await client.list(targetDir);
 
     const folders: FolderEntry[] = listing
       .filter((item) => item.type === "d")

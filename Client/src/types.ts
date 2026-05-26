@@ -27,6 +27,7 @@ export interface UploadResponse {
 export interface FilesResponse {
   success: boolean;
   files: FileEntry[];
+  folders?: FolderEntry[];
   message: string;
 }
 

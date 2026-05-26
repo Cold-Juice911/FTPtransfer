@@ -15,6 +15,7 @@ import {
   Sparkles,
   LayoutGrid,
   List,
+  FolderPlus,
 } from 'lucide-react';
 import { ApiService } from '../services/api';
 import { SftpCredentials, FolderEntry, FileEntry } from '../types';
@@ -40,8 +41,10 @@ export const FolderBrowserCard: React.FC<Props> = ({
 
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [subfolders, setSubfolders] = useState<FolderEntry[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
 
   // ─── Auto-clear status messages ────────────────────────
   useEffect(() => {
@@ -56,7 +59,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
 
   // Selection state
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Rename state
@@ -66,8 +69,24 @@ export const FolderBrowserCard: React.FC<Props> = ({
   const [renameFileValue, setRenameFileValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  // Create Folder state
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+
+  // ─── Filter ───
+  const filteredFolders = folders.filter((f) =>
+    f.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredSubfolders = subfolders.filter((f) =>
+    f.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const filteredFiles = files
+    .filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
 
   // ─── Fetch Folders ───
   const handleFetchFolders = useCallback(async () => {
@@ -101,20 +120,23 @@ export const FolderBrowserCard: React.FC<Props> = ({
       setFilesLoading(true);
       setError(null);
       setSuccess(null);
-      setSelectedFile(null);
+      setSelectedFiles([]);
       setRenamingFile(null);
       try {
         const res = await ApiService.fetchFiles({ ...credentials, folder: folderName });
         if (res.success) {
           setFiles(res.files);
+          setSubfolders(res.folders || []);
         } else {
           setError(res.message);
           setFiles([]);
+          setSubfolders([]);
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Failed to fetch files';
         setError(msg);
         setFiles([]);
+        setSubfolders([]);
       } finally {
         setFilesLoading(false);
       }
@@ -173,7 +195,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
         try {
           const res = await ApiService.deleteFile({ ...credentials, folder: currentFolder }, filename);
           if (res.success) {
-            setSelectedFile(null);
+            setSelectedFiles([]);
             await handleOpenFolder(currentFolder);
             // Also refresh folders in case it changes counts
             await handleFetchFolders();
@@ -222,6 +244,39 @@ export const FolderBrowserCard: React.FC<Props> = ({
     }
   }, [credentials, renamingFolder, renameFolderValue, handleFetchFolders]);
 
+  // ─── Create Folder ───
+  const handleCreateFolder = useCallback(async () => {
+    if (!newFolderName.trim()) {
+      setIsCreatingFolder(false);
+      return;
+    }
+    const targetPath = currentFolder 
+      ? `${currentFolder}/${newFolderName.trim()}`
+      : newFolderName.trim();
+
+    setFilesLoading(true);
+    try {
+      const res = await ApiService.createFolder(credentials, targetPath);
+      if (res.success) {
+        setSuccess(`Folder "${newFolderName}" created successfully`);
+        setNewFolderName('');
+        setIsCreatingFolder(false);
+        if (currentFolder) {
+          await handleOpenFolder(currentFolder);
+        } else {
+          await handleFetchFolders();
+        }
+      } else {
+        setError(res.message);
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to create folder';
+      setError(msg);
+    } finally {
+      setFilesLoading(false);
+    }
+  }, [credentials, currentFolder, newFolderName, handleOpenFolder, handleFetchFolders]);
+
   // ─── Rename File ───
   const startRenamingFile = useCallback((fileName: string) => {
     setRenamingFile(fileName);
@@ -244,7 +299,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
       );
       if (res.success) {
         setRenamingFile(null);
-        setSelectedFile(null);
+        setSelectedFiles([]);
         await handleOpenFolder(currentFolder);
       } else {
         setError(res.message);
@@ -268,6 +323,68 @@ export const FolderBrowserCard: React.FC<Props> = ({
     }
   }, []);
 
+  // ─── Copy All URLs ───
+  const handleCopyAllUrls = useCallback(async () => {
+    try {
+      const urls = filteredFiles.map(f => f.url).join('\n');
+      await navigator.clipboard.writeText(urls);
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy all', err);
+    }
+  }, [filteredFiles]);
+
+  // ─── Toggle Single Selection ───
+  const toggleSelectFile = useCallback((filename: string) => {
+    setSelectedFiles((prev) => {
+      const next = prev.includes(filename)
+        ? prev.filter((name) => name !== filename)
+        : [...prev, filename];
+      return next;
+    });
+  }, []);
+
+  // ─── Select All ───
+  const handleSelectAll = useCallback(() => {
+    setSelectedFiles((prev) => {
+      if (prev.length === filteredFiles.length) {
+        return [];
+      } else {
+        const next = filteredFiles.map((f) => f.name);
+        return next;
+      }
+    });
+  }, [filteredFiles]);
+
+  // ─── Bulk Delete Files ───
+  const handleBulkDelete = useCallback(() => {
+    if (selectedFiles.length === 0 || !currentFolder) return;
+    onConfirmDelete(`Delete the ${selectedFiles.length} selected file(s)? This cannot be undone.`, async () => {
+      setFilesLoading(true);
+      setError(null);
+      setSuccess(null);
+      try {
+        let successCount = 0;
+        for (const filename of selectedFiles) {
+          const res = await ApiService.deleteFile({ ...credentials, folder: currentFolder }, filename);
+          if (res.success) {
+            successCount++;
+          }
+        }
+        setSuccess(`Successfully deleted ${successCount} file(s).`);
+        setSelectedFiles([]);
+        await handleOpenFolder(currentFolder);
+        await handleFetchFolders();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Bulk delete failed';
+        setError(msg);
+      } finally {
+        setFilesLoading(false);
+      }
+    });
+  }, [credentials, currentFolder, selectedFiles, handleOpenFolder, handleFetchFolders, onConfirmDelete]);
+
   // ─── Deselect on outside click ───
   const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -276,7 +393,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
       // If clicking on an item card or action button, skip
       if (target.closest('[data-item-card]') || target.closest('[data-item-action]')) return;
       setSelectedFolder(null);
-      setSelectedFile(null);
+      setSelectedFiles([]);
       if (renamingFolder) setRenamingFolder(null);
       if (renamingFile) setRenamingFile(null);
     };
@@ -285,13 +402,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
     return () => el?.removeEventListener('click', handler);
   }, [renamingFolder, renamingFile]);
 
-  // ─── Filter ───
-  const filteredFolders = folders.filter((f) =>
-    f.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-  const filteredFiles = files
-    .filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => (b.modifiedAt ?? 0) - (a.modifiedAt ?? 0));
+
 
   const isRefreshing = currentFolder ? filesLoading : loading;
 
@@ -308,7 +419,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
             <button
               onClick={() => {
                 setCurrentFolder(null);
-                setSelectedFile(null);
+                setSelectedFiles([]);
                 setRenamingFile(null);
               }}
               className="p-1.5 hover:bg-taupe-100 rounded-lg text-text-muted transition-colors"
@@ -345,6 +456,27 @@ export const FolderBrowserCard: React.FC<Props> = ({
               <List className="w-4 h-4" />
             </button>
           </div>
+          {currentFolder && filteredFiles.length > 0 && (
+            <button
+              onClick={handleCopyAllUrls}
+              className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm"
+              title="Copy all image URLs"
+            >
+              {copiedAll ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>Copy All URLs</span>
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setIsCreatingFolder(true);
+              setNewFolderName('');
+            }}
+            className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors shadow-sm"
+            title="Create new folder"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Create Folder</span>
+          </button>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -377,6 +509,63 @@ export const FolderBrowserCard: React.FC<Props> = ({
         )}
       </div>
 
+      {/* Selected Image URL / Bulk Actions Sub-bar */}
+      {currentFolder && selectedFiles.length > 0 && (
+        <div className="mb-3 p-3 bg-primary/5 border border-primary/15 rounded-xl flex items-center justify-between gap-3 text-xs leading-none animate-fadeIn transition-all shadow-sm">
+          <div className="flex items-center gap-2 truncate flex-1 min-w-0">
+            <span className="font-extrabold text-primary shrink-0 uppercase tracking-wider text-[9px] bg-primary/10 px-2 py-1 rounded-md shadow-sm">
+              {selectedFiles.length} Selected
+            </span>
+            {selectedFiles.length === 1 ? (
+              <span className="font-mono text-text truncate select-all text-[11px] font-medium bg-background/60 px-2.5 py-1 rounded border border-taupe-200/40 shadow-inner">
+                {filteredFiles.find(f => selectedFiles.includes(f.name))?.url || ''}
+              </span>
+            ) : (
+              <span className="text-text font-semibold text-xs truncate">
+                Selected {selectedFiles.length} files. Copy their URLs at once or delete them recursively.
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={async () => {
+                const urls = filteredFiles
+                  .filter(f => selectedFiles.includes(f.name))
+                  .map(f => f.url)
+                  .join('\n');
+                try {
+                  await navigator.clipboard.writeText(urls);
+                  setSuccess(`Copied URLs of ${selectedFiles.length} item(s)!`);
+                } catch (err) {
+                  console.error('Failed to copy', err);
+                }
+              }}
+              className="flex items-center gap-1.5 bg-background border border-taupe-300 hover:bg-taupe-100 text-text px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm"
+              title="Copy Selected URLs"
+            >
+              <Copy className="w-3.5 h-3.5 text-primary" />
+              <span>{selectedFiles.length === 1 ? 'Copy URL' : 'Copy Selected URLs'}</span>
+            </button>
+            
+            <button
+              onClick={handleBulkDelete}
+              className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all shadow-sm"
+              title="Delete Selected Files"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+              <span>Delete Selected</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedFiles([])}
+              className="text-[10px] font-bold text-text-muted hover:underline hover:text-text px-1"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Status Messages ── */}
       {(error || success) && (
         <div
@@ -407,6 +596,37 @@ export const FolderBrowserCard: React.FC<Props> = ({
 
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {isCreatingFolder && (
+                  <div className="flex flex-col items-center p-3 m-1 rounded-xl border border-primary/45 bg-primary/5">
+                    <FolderIcon className="w-10 h-10 text-primary/80 mb-2 animate-pulse" />
+                    <input
+                      type="text"
+                      placeholder="Folder name..."
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateFolder();
+                        if (e.key === 'Escape') setIsCreatingFolder(false);
+                      }}
+                      autoFocus
+                      className="w-full bg-background border border-taupe-300 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-primary"
+                    />
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <button
+                        onClick={handleCreateFolder}
+                        className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded-md hover:bg-primary-hover shadow-sm"
+                      >
+                        Create
+                      </button>
+                      <button
+                        onClick={() => setIsCreatingFolder(false)}
+                        className="px-2 py-1 bg-taupe-100 text-text text-[10px] font-bold rounded-md hover:bg-taupe-200 shadow-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {filteredFolders.map((f) => {
                   const isSelected = selectedFolder === f.name;
                   const isRenaming = renamingFolder === f.name;
@@ -502,6 +722,37 @@ export const FolderBrowserCard: React.FC<Props> = ({
               </div>
             ) : (
               <div className="space-y-2">
+                {isCreatingFolder && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-primary/45 bg-primary/5">
+                    <FolderIcon className="w-5 h-5 text-primary shrink-0 animate-pulse" />
+                    <input
+                      type="text"
+                      placeholder="Folder name..."
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateFolder();
+                        if (e.key === 'Escape') setIsCreatingFolder(false);
+                      }}
+                      autoFocus
+                      className="flex-1 bg-background border border-taupe-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                    />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={handleCreateFolder}
+                        className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded-md hover:bg-primary-hover shadow-sm"
+                      >
+                        Create
+                      </button>
+                      <button
+                        onClick={() => setIsCreatingFolder(false)}
+                        className="px-2 py-1 bg-taupe-100 text-text text-[10px] font-bold rounded-md hover:bg-taupe-200 shadow-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {filteredFolders.map((f) => {
                   const isSelected = selectedFolder === f.name;
                   const isRenaming = renamingFolder === f.name;
@@ -593,11 +844,41 @@ export const FolderBrowserCard: React.FC<Props> = ({
         {/* Files View */}
         {currentFolder && (
           <div>
+            {filteredFiles.length > 0 && (
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-taupe-100/60 text-xs select-none">
+                <div className="flex items-center gap-2">
+                  <div 
+                    onClick={handleSelectAll}
+                    className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0
+                      ${selectedFiles.length === filteredFiles.length
+                        ? 'bg-primary border-primary text-white scale-105' 
+                        : selectedFiles.length > 0
+                          ? 'bg-primary/50 border-primary text-white'
+                          : 'bg-background border-taupe-300 hover:border-primary'}`}
+                  >
+                    {selectedFiles.length === filteredFiles.length ? (
+                      <Check className="w-3 h-3 stroke-[3]" />
+                    ) : selectedFiles.length > 0 ? (
+                      <div className="w-2 h-0.5 bg-white rounded-full" />
+                    ) : null}
+                  </div>
+                  <button 
+                    onClick={handleSelectAll}
+                    className="font-bold text-text hover:text-primary transition-colors text-[11px]"
+                  >
+                    {selectedFiles.length === filteredFiles.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                  <span className="text-text-muted font-medium ml-1 text-[11px]">
+                    ({selectedFiles.length} of {filteredFiles.length} selected)
+                  </span>
+                </div>
+              </div>
+            )}
             {filesLoading && files.length === 0 && (
               <div className="text-center py-10 text-text-muted text-sm">Loading files...</div>
             )}
 
-            {!filesLoading && files.length === 0 && (
+            {!filesLoading && files.length === 0 && subfolders.length === 0 && (
               <div className="text-center py-10 border-2 border-dashed border-taupe-200 rounded-xl">
                 <div className="w-10 h-10 bg-taupe-100 rounded-full flex items-center justify-center mx-auto mb-2">
                   <FolderOpen className="w-5 h-5 text-text-muted" />
@@ -607,9 +888,125 @@ export const FolderBrowserCard: React.FC<Props> = ({
             )}
 
             {viewMode === 'grid' ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {filteredFiles.map((f) => {
-                  const isSelected = selectedFile === f.name;
+              <>
+                {/* Nested Subfolders list inside files view */}
+                {(filteredSubfolders.length > 0 || isCreatingFolder) && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4 border-b border-taupe-100/50 pb-4">
+                    {/* Inline Folder Creation card */}
+                    {isCreatingFolder && (
+                      <div className="flex flex-col items-center p-3 m-1 rounded-xl border border-primary/45 bg-primary/5">
+                        <FolderIcon className="w-10 h-10 text-primary/80 mb-2 animate-pulse" />
+                        <input
+                          type="text"
+                          placeholder="Folder name..."
+                          value={newFolderName}
+                          onChange={(e) => setNewFolderName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleCreateFolder();
+                            if (e.key === 'Escape') setIsCreatingFolder(false);
+                          }}
+                          autoFocus
+                          className="w-full bg-background border border-taupe-300 rounded-lg px-2 py-1 text-xs text-center focus:outline-none focus:border-primary"
+                        />
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <button
+                            onClick={handleCreateFolder}
+                            className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded-md hover:bg-primary-hover shadow-sm"
+                          >
+                            Create
+                          </button>
+                          <button
+                            onClick={() => setIsCreatingFolder(false)}
+                            className="px-2 py-1 bg-taupe-100 text-text text-[10px] font-bold rounded-md hover:bg-taupe-200 shadow-sm"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {filteredSubfolders.map((f) => {
+                      const isSelected = selectedFolder === `${currentFolder}/${f.name}`;
+                      const isRenaming = renamingFolder === `${currentFolder}/${f.name}`;
+
+                      return (
+                        <div
+                          key={f.name}
+                          onClick={() => handleOpenFolder(`${currentFolder}/${f.name}`)}
+                          className={`group relative flex flex-col items-center p-3 m-1 rounded-xl border cursor-pointer transition-all duration-150
+                            ${
+                              isSelected
+                                ? 'border-primary/40 bg-primary/5'
+                                : 'border-taupe-200 bg-background hover:border-primary/30 hover:bg-taupe-50'
+                            }`}
+                        >
+                          <FolderIcon className="w-10 h-10 text-primary/80 mb-2 group-hover:scale-105 transition-transform" />
+                          
+                          {isRenaming ? (
+                            <div className="flex flex-col items-center w-full" onClick={(e) => e.stopPropagation()}>
+                              <input
+                                ref={renameInputRef}
+                                type="text"
+                                value={renameFolderValue}
+                                onChange={(e) => setRenameFolderValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleRenameFolder();
+                                  if (e.key === 'Escape') setRenamingFolder(null);
+                                }}
+                                className="w-full text-xs text-center border border-primary/40 rounded px-1.5 py-0.5 bg-background focus:outline-none"
+                              />
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <button
+                                  onClick={handleRenameFolder}
+                                  className="px-1.5 py-0.5 bg-primary text-white text-[9px] font-bold rounded hover:bg-primary-hover"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => setRenamingFolder(null)}
+                                  className="px-1.5 py-0.5 bg-taupe-100 text-text text-[9px] font-bold rounded hover:bg-taupe-200"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs font-semibold text-text text-center truncate w-full px-1">
+                              {f.name}
+                            </span>
+                          )}
+
+                          {!isRenaming && (
+                            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 z-10" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => {
+                                  setRenamingFolder(`${currentFolder}/${f.name}`);
+                                  setRenameFolderValue(f.name);
+                                  setTimeout(() => renameInputRef.current?.focus(), 50);
+                                }}
+                                className="p-1 hover:bg-primary/10 rounded text-text-muted hover:text-primary transition-colors"
+                                title="Rename Folder"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteFolder(`${currentFolder}/${f.name}`)}
+                                className="p-1 hover:bg-red-50 rounded text-text-muted hover:text-red-500 transition-colors"
+                                title="Delete Folder"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {filteredFiles.map((f) => {
+                  const isSelected = selectedFiles.includes(f.name);
                   const isRenaming = renamingFile === f.name;
 
                   return (
@@ -619,7 +1016,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!isRenaming) {
-                          setSelectedFile(isSelected ? null : f.name);
+                          toggleSelectFile(f.name);
                           if (renamingFile && renamingFile !== f.name) setRenamingFile(null);
                         }
                       }}
@@ -632,18 +1029,19 @@ export const FolderBrowserCard: React.FC<Props> = ({
                     >
                       {/* Thumbnail */}
                       <div className="relative w-full aspect-square rounded-lg bg-taupe-50 border border-taupe-200 overflow-hidden mb-1.5 flex items-center justify-center">
-                        {/* Hover Copy Button */}
-                        <button
+                        {/* Checkbox selector */}
+                        <div 
                           onClick={(e) => {
                             e.stopPropagation();
-                            copyToClipboard(f.url);
+                            toggleSelectFile(f.name);
                           }}
-                          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm border border-taupe-200 shadow-sm px-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 z-10 hover:bg-background text-text"
-                          title="Copy URL"
+                          className={`absolute top-1.5 right-1.5 z-10 w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all cursor-pointer shadow-sm
+                            ${isSelected 
+                              ? 'bg-primary border-primary text-white scale-105' 
+                              : 'bg-white/80 backdrop-blur-sm border-taupe-300 opacity-0 group-hover:opacity-100 hover:border-primary hover:bg-white'}`}
                         >
-                          {copiedUrl === f.url ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5 text-primary" />}
-                          <span className="text-[10px] font-bold">Copy URL</span>
-                        </button>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
                         <img
                           src={f.url}
                           alt={f.name}
@@ -704,10 +1102,30 @@ export const FolderBrowserCard: React.FC<Props> = ({
                         </span>
                       )}
 
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <span className="text-[9px] text-text-muted">
+                      <div className="flex items-center justify-between w-full mt-1 px-1 border-t border-taupe-100/50 pt-1">
+                        <span className="text-[9px] text-text-muted font-mono">
                           {(f.size / 1024).toFixed(1)} KB
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(f.url);
+                          }}
+                          className="text-[9px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                          title="Copy Image URL"
+                        >
+                          {copiedUrl === f.url ? (
+                            <>
+                              <Check className="w-2.5 h-2.5 text-green-600" />
+                              <span className="text-green-600">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-2.5 h-2.5" />
+                              <span>Copy URL</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                       {f.modifiedAt > 0 && (
                         <div className="flex items-center gap-0.5 mt-0.5" title={new Date(f.modifiedAt).toLocaleString()}>
@@ -751,10 +1169,121 @@ export const FolderBrowserCard: React.FC<Props> = ({
                   );
                 })}
               </div>
+              </>
             ) : (
               <div className="space-y-2">
+                {/* Inline Folder Creation row */}
+                {isCreatingFolder && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl border border-primary/45 bg-primary/5">
+                    <FolderIcon className="w-5 h-5 text-primary shrink-0 animate-pulse" />
+                    <input
+                      type="text"
+                      placeholder="Folder name..."
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateFolder();
+                        if (e.key === 'Escape') setIsCreatingFolder(false);
+                      }}
+                      autoFocus
+                      className="flex-1 bg-background border border-taupe-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                    />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={handleCreateFolder}
+                        className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded-md hover:bg-primary-hover shadow-sm"
+                      >
+                        Create
+                      </button>
+                      <button
+                        onClick={() => setIsCreatingFolder(false)}
+                        className="px-2 py-1 bg-taupe-100 text-text text-[10px] font-bold rounded-md hover:bg-taupe-200 shadow-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Subfolders list in List view */}
+                {filteredSubfolders.map((f) => {
+                  const isSelected = selectedFolder === `${currentFolder}/${f.name}`;
+                  const isRenaming = renamingFolder === `${currentFolder}/${f.name}`;
+
+                  return (
+                    <div
+                      key={f.name}
+                      onClick={() => handleOpenFolder(`${currentFolder}/${f.name}`)}
+                      className={`group relative flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all duration-150 bg-background
+                        ${
+                          isSelected
+                            ? 'border-primary/40 bg-primary/5'
+                            : 'border-taupe-200 hover:border-primary/30'
+                        }`}
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <FolderIcon className="w-5 h-5 text-primary shrink-0" />
+                        {isRenaming ? (
+                          <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              ref={renameInputRef}
+                              type="text"
+                              value={renameFolderValue}
+                              onChange={(e) => setRenameFolderValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameFolder();
+                                if (e.key === 'Escape') setRenamingFolder(null);
+                              }}
+                              className="bg-background border border-primary/45 rounded px-2 py-0.5 text-xs focus:outline-none flex-1 max-w-[200px]"
+                            />
+                            <button
+                              onClick={handleRenameFolder}
+                              className="px-2 py-0.5 bg-primary text-white text-[10px] font-bold rounded hover:bg-primary-hover"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setRenamingFolder(null)}
+                              className="px-2 py-0.5 bg-taupe-100 text-text text-[10px] font-bold rounded hover:bg-taupe-200"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-semibold text-text truncate">
+                            {f.name}
+                          </span>
+                        )}
+                      </div>
+
+                      {!isRenaming && (
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => {
+                              setRenamingFolder(`${currentFolder}/${f.name}`);
+                              setRenameFolderValue(f.name);
+                              setTimeout(() => renameInputRef.current?.focus(), 50);
+                            }}
+                            className="p-1.5 hover:bg-primary/10 rounded text-text-muted hover:text-primary transition-colors"
+                            title="Rename Folder"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFolder(`${currentFolder}/${f.name}`)}
+                            className="p-1.5 hover:bg-red-50 rounded text-text-muted hover:text-red-500 transition-colors"
+                            title="Delete Folder"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
                 {filteredFiles.map((f) => {
-                  const isSelected = selectedFile === f.name;
+                  const isSelected = selectedFiles.includes(f.name);
                   const isRenaming = renamingFile === f.name;
 
                   return (
@@ -764,7 +1293,7 @@ export const FolderBrowserCard: React.FC<Props> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!isRenaming) {
-                          setSelectedFile(isSelected ? null : f.name);
+                          toggleSelectFile(f.name);
                           if (renamingFile && renamingFile !== f.name) setRenamingFile(null);
                         }
                       }}
@@ -775,17 +1304,21 @@ export const FolderBrowserCard: React.FC<Props> = ({
                             : 'border-taupe-200 hover:border-primary/30'
                         }`}
                     >
+                      {/* Checkbox Selector */}
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectFile(f.name);
+                        }}
+                        className={`w-4.5 h-4.5 rounded-md border flex items-center justify-center transition-all cursor-pointer shrink-0 self-center
+                          ${isSelected 
+                            ? 'bg-primary border-primary text-white scale-110 shadow-sm' 
+                            : 'bg-background border-taupe-300 hover:border-primary opacity-30 group-hover:opacity-100 shadow-sm'}`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+
                       <div className="relative flex-shrink-0 w-16 h-16 rounded-xl bg-taupe-50 border border-taupe-200 overflow-hidden flex items-center justify-center">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(f.url);
-                          }}
-                          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm border border-taupe-200 shadow-sm px-2 py-1.5 rounded-lg flex items-center justify-center gap-1.5 z-10 hover:bg-background text-text"
-                          title="Copy URL"
-                        >
-                          {copiedUrl === f.url ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5 text-primary" />}
-                        </button>
                         <img
                           src={f.url}
                           alt={f.name}
@@ -824,11 +1357,31 @@ export const FolderBrowserCard: React.FC<Props> = ({
                             <div className="text-sm font-semibold text-text truncate" title={f.name}>
                               {f.name}
                             </div>
-                            <div className="flex flex-wrap items-center gap-2 text-[10px] text-text-muted">
+                            <div className="flex flex-wrap items-center gap-3 text-[10px] text-text-muted mt-1">
                               <span>{(f.size / 1024).toFixed(1)} KB</span>
                               {f.modifiedAt > 0 && (
                                 <span>{new Date(f.modifiedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                               )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(f.url);
+                                }}
+                                className="font-bold text-primary hover:underline flex items-center gap-0.5"
+                                title="Copy Image URL"
+                              >
+                                {copiedUrl === f.url ? (
+                                  <>
+                                    <Check className="w-2.5 h-2.5 text-green-600" />
+                                    <span className="text-green-600 font-bold">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-2.5 h-2.5" />
+                                    <span>Copy URL</span>
+                                  </>
+                                )}
+                              </button>
                             </div>
                           </div>
                         )}

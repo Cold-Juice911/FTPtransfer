@@ -5,6 +5,7 @@ import {
   FoldersResponse,
   DeleteResponse,
   RenameResponse,
+  CreateFolderResponse,
 } from "../types";
 
 // const API_BASE_URL = "https://ftptransfer-demos.onrender.com"; 
@@ -120,5 +121,14 @@ export class ApiService {
       body: JSON.stringify({ ...credentials, oldName, newName }),
     });
     return res.json();
+  }
+
+  static async createFolder(credentials: SftpCredentials, folderName: string): Promise<CreateFolderResponse> {
+    const res = await fetch(`${API_BASE_URL}/api/create-folder`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...credentials, folderName }),
+    });
+    return res.json() as Promise<CreateFolderResponse>;
   }
 }

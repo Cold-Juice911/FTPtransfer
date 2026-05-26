@@ -20,6 +20,7 @@ import {
   deleteFolder,
   renameFolder,
   renameFile,
+  createFolder,
 } from "./ftpService";
 import {
   uploadFiles as gdUploadFiles,
@@ -303,11 +304,13 @@ router.post("/files", async (req: Request, res: Response): Promise<void> => {
     }
 
     const files = await listFiles(credentials);
+    const subfolders = await listFolders(credentials, credentials.folder);
 
     res.json({
       success: true,
       files,
-      message: `Found ${files.length} file(s)`,
+      folders: subfolders,
+      message: `Found ${files.length} file(s) and ${subfolders.length} folder(s)`,
     } satisfies FilesResponse);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error occurred";
@@ -580,11 +583,13 @@ router.post("/godaddy/files", async (req: Request, res: Response): Promise<void>
     }
 
     const files = await gdListFiles(credentials);
+    const subfolders = await gdListFolders(credentials, credentials.folder);
 
     res.json({
       success: true,
       files,
-      message: `Found ${files.length} file(s)`,
+      folders: subfolders,
+      message: `Found ${files.length} file(s) and ${subfolders.length} folder(s)`,
     } satisfies FilesResponse);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error occurred";
@@ -627,6 +632,38 @@ router.post("/godaddy/folders", async (req: Request, res: Response): Promise<voi
       folders: [],
       message: `Failed to list folders: ${message}`,
     } satisfies FoldersResponse);
+  }
+});
+
+/**
+ * POST /api/create-folder
+ */
+router.post("/create-folder", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const body = req.body as Record<string, string>;
+    const credentials = extractCredentials(body);
+    const folderName = body.folderName;
+
+    if (!credentials || !folderName) {
+      res.status(400).json({
+        success: false,
+        message: "Missing required fields (host, user, password, port, domain, folderName)",
+      } satisfies CreateFolderResponse);
+      return;
+    }
+
+    await createFolder(credentials, folderName);
+
+    res.json({
+      success: true,
+      message: `Successfully created folder "${folderName}"`,
+    } satisfies CreateFolderResponse);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error occurred";
+    res.status(500).json({
+      success: false,
+      message: `Failed to create folder: ${message}`,
+    } satisfies CreateFolderResponse);
   }
 });
 
