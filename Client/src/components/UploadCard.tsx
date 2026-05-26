@@ -66,6 +66,7 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
   const [queuedFiles, setQueuedFiles] = useState<QueuedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [sftpProgress, setSftpProgress] = useState<{ currentFile: string; index: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -163,6 +164,7 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
 
     setUploading(true);
     setProgress(0);
+    setSftpProgress(null);
     setError(null);
     setSuccess(null);
 
@@ -171,12 +173,39 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
 
     const service = serviceType === 'godaddy' ? GoDaddyApiService : ApiService;
 
+    // Generate unique client ID for SSE progress
+    const clientId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    const apiBaseUrl = (import.meta as any).env.VITE_API_BASE_URL || '';
+    const eventSource = new EventSource(`${apiBaseUrl}/api/upload-progress/${clientId}`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'progress') {
+          setSftpProgress({
+            currentFile: data.name,
+            index: data.index,
+            total: data.total
+          });
+        } else if (data.type === 'done') {
+          eventSource.close();
+        }
+      } catch (err) {
+        console.error("SSE parse error", err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
     try {
       const res = await service.uploadFiles(
         { ...credentials, folder }, 
         filesToUpload, 
         setProgress,
-        relativePaths
+        relativePaths,
+        clientId
       );
       if (res.success) {
         setSuccess(res.message);
@@ -189,15 +218,21 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
       const msg = e instanceof Error ? e.message : 'Upload failed';
       setError(msg);
     } finally {
+      eventSource.close();
       setUploading(false);
+      setSftpProgress(null);
       setTimeout(() => setProgress(0), 2000);
     }
   };
 
   return (
     <section
-      className="bg-card shadow-sm rounded-2xl border border-taupe-200 p-5 flex flex-col"
+      className={`bg-card shadow-sm rounded-2xl border p-5 flex flex-col transition-all duration-200
+        ${isDragActive ? 'border-primary bg-primary/5 ring-2 ring-primary/20 scale-[0.995]' : 'border-taupe-200'}`}
       style={{ minHeight: '450px', maxHeight: 'calc(100vh - 160px)' }}
+      onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
+      onDragLeave={() => setIsDragActive(false)}
+      onDrop={handleDrop}
     >
       {/* Title Header */}
       <div className="flex items-center justify-between mb-4 pb-3 border-b border-taupe-100">
@@ -247,9 +282,6 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
           <div
             className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-150 flex-1 flex flex-col justify-center items-center cursor-pointer
               ${isDragActive ? 'border-primary bg-primary/5 scale-[0.99] drop-zone-active' : 'border-taupe-300 hover:border-primary hover:bg-background/40'}`}
-            onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
-            onDragLeave={() => setIsDragActive(false)}
-            onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
           >
             <div className="w-12 h-12 bg-taupe-100 rounded-2xl flex items-center justify-center mb-3 text-primary shadow-inner">
@@ -345,9 +377,6 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
             <div
               className={`border border-dashed rounded-xl p-2.5 text-center mt-2.5 cursor-pointer transition-colors duration-150
                 ${isDragActive ? 'border-primary bg-primary/5' : 'border-taupe-300 hover:border-primary/50'}`}
-              onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
-              onDragLeave={() => setIsDragActive(false)}
-              onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
             >
               <p className="text-[10px] text-text-muted font-semibold">Drop files/folders here to append</p>
@@ -367,10 +396,39 @@ export const UploadCard: React.FC<Props> = ({ credentials, folders, onUploadSucc
         {/* Upload Progress */}
         {progress > 0 && (
           <div className="mt-3 flex-shrink-0">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[10px] font-bold text-text-muted">
+                {progress === 100 ? 'Processing Uploaded Files...' : 'Uploading files to server...'}
+              </span>
+              <span className="text-[10px] font-extrabold text-text">{progress}%</span>
+            </div>
             <div className="h-1.5 w-full bg-taupe-200 rounded-full overflow-hidden">
               <div className="h-full bg-primary transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
-            <p className="text-right text-[10px] text-text-muted mt-0.5 font-bold">{progress}%</p>
+          </div>
+        )}
+
+        {/* SFTP/FTP Remote Server Transfer Progress */}
+        {sftpProgress && (
+          <div className="mt-3 p-3 bg-taupe-100/50 border border-taupe-200 rounded-xl flex-shrink-0">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[10px] font-bold text-primary flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block animate-ping"></span>
+                Writing to SFTP cPanel Server...
+              </span>
+              <span className="text-[10px] font-extrabold text-text">
+                {sftpProgress.index} / {sftpProgress.total} Files
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-taupe-200 rounded-full overflow-hidden mb-1">
+              <div 
+                className="h-full bg-primary transition-all duration-300" 
+                style={{ width: `${(sftpProgress.index / sftpProgress.total) * 100}%` }} 
+              />
+            </div>
+            <p className="text-[9px] text-text-muted truncate font-mono">
+              Saving: <span className="font-semibold text-text">{sftpProgress.currentFile}</span>
+            </p>
           </div>
         )}
 

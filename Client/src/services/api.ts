@@ -39,7 +39,8 @@ export class ApiService {
     credentials: SftpCredentials & { folder: string }, 
     files: File[], 
     onProgress?: (pct: number) => void,
-    relativePaths?: string[]
+    relativePaths?: string[],
+    clientId?: string
   ): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append("host", credentials.host);
@@ -48,6 +49,7 @@ export class ApiService {
     formData.append("port", credentials.port.toString());
     formData.append("domain", credentials.domain);
     formData.append("folder", credentials.folder);
+    if (clientId) formData.append("clientId", clientId);
     
     files.forEach((file) => formData.append("files", file));
     if (relativePaths) {

@@ -179,6 +179,24 @@ function extractCredentials(body: Record<string, string>): SftpCredentials | nul
   };
 }
 
+// ─── Server-Sent Events (SSE) Upload Progress System ───────
+const sseClients = new Map<string, Response>();
+
+router.get("/upload-progress/:clientId", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const clientId = req.params.clientId as string;
+  sseClients.set(clientId, res);
+
+  req.on("close", () => {
+    sseClients.delete(clientId);
+  });
+});
+
 // ═══════════════════════════════════════════════════════════
 // HOSTINGER ROUTES (unchanged)
 // ═══════════════════════════════════════════════════════════
@@ -232,11 +250,22 @@ router.post(
         ? [relativePathsInput]
         : [];
 
-      const urls = await uploadFiles(credentials, files, relativePaths);
+      const clientId = body.clientId;
+      const clientSse = clientId ? sseClients.get(clientId) : null;
+
+      const urls = await uploadFiles(credentials, files, relativePaths, (index, total, name) => {
+        if (clientSse) {
+          clientSse.write(`data: ${JSON.stringify({ type: "progress", index, total, name })}\n\n`);
+        }
+      });
 
       // Clean up temp files
       for (const file of files) {
         fs.unlink(file.path, () => {});
+      }
+
+      if (clientSse) {
+        clientSse.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
       }
 
       res.json({
@@ -500,10 +529,21 @@ router.post(
         ? [relativePathsInput]
         : [];
 
-      const urls = await gdUploadFiles(credentials, files, relativePaths);
+      const clientId = body.clientId;
+      const clientSse = clientId ? sseClients.get(clientId) : null;
+
+      const urls = await gdUploadFiles(credentials, files, relativePaths, (index, total, name) => {
+        if (clientSse) {
+          clientSse.write(`data: ${JSON.stringify({ type: "progress", index, total, name })}\n\n`);
+        }
+      });
 
       for (const file of files) {
         fs.unlink(file.path, () => {});
+      }
+
+      if (clientSse) {
+        clientSse.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
       }
 
       res.json({

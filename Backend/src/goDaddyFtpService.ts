@@ -85,7 +85,8 @@ async function getUniqueFilename(
 export async function uploadFiles(
   credentials: SftpCredentials,
   files: Express.Multer.File[],
-  relativePaths?: string[]
+  relativePaths?: string[],
+  onFileComplete?: (index: number, total: number, name: string) => void
 ): Promise<string[]> {
   const folder = credentials.folder ?? "uploads";
   const client = await createSftpClient(credentials);
@@ -120,6 +121,10 @@ export async function uploadFiles(
       await client.put(file.path, remotePath);
 
       urls.push(buildPublicUrl(credentials, folder, finalRelPath));
+
+      if (onFileComplete) {
+        onFileComplete(i + 1, files.length, file.originalname);
+      }
     }
 
     return urls;
