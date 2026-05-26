@@ -42,7 +42,8 @@ export class GoDaddyApiService {
   static async uploadFiles(
     credentials: SftpCredentials & { folder: string },
     files: File[],
-    onProgress?: (pct: number) => void
+    onProgress?: (pct: number) => void,
+    relativePaths?: string[]
   ): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append("host", credentials.host);
@@ -53,6 +54,9 @@ export class GoDaddyApiService {
     formData.append("folder", credentials.folder);
 
     files.forEach((file) => formData.append("files", file));
+    if (relativePaths) {
+      relativePaths.forEach((path) => formData.append("relativePaths", path));
+    }
 
     return new Promise<UploadResponse>((resolve, reject) => {
       const xhr = new XMLHttpRequest();

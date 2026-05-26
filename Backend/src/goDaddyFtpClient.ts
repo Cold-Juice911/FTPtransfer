@@ -152,6 +152,7 @@ export async function listFiles(
         name: item.name,
         url: buildPublicUrl(credentials, folder, item.name),
         size: item.size,
+        modifiedAt: item.modifiedAt ? new Date(item.modifiedAt).getTime() : 0,
       }));
 
     return files;

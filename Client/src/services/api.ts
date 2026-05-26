@@ -7,9 +7,9 @@ import {
   RenameResponse,
 } from "../types";
 
-const API_BASE_URL = "https://ftptransfer-demos.onrender.com"; 
+// const API_BASE_URL = "https://ftptransfer-demos.onrender.com"; 
 
-// const API_BASE_URL = "http://localhost:3001"; // Use local backend during development
+const API_BASE_URL = "http://localhost:3001"; // Use local backend during development
 
 
 const headers = {
@@ -35,7 +35,12 @@ export class ApiService {
     return res.json();
   }
 
-  static async uploadFiles(credentials: SftpCredentials & { folder: string }, files: File[], onProgress?: (pct: number) => void): Promise<UploadResponse> {
+  static async uploadFiles(
+    credentials: SftpCredentials & { folder: string }, 
+    files: File[], 
+    onProgress?: (pct: number) => void,
+    relativePaths?: string[]
+  ): Promise<UploadResponse> {
     const formData = new FormData();
     formData.append("host", credentials.host);
     formData.append("user", credentials.user);
@@ -45,6 +50,9 @@ export class ApiService {
     formData.append("folder", credentials.folder);
     
     files.forEach((file) => formData.append("files", file));
+    if (relativePaths) {
+      relativePaths.forEach((path) => formData.append("relativePaths", path));
+    }
 
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();

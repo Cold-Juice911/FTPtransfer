@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
-import { AccountSwitcher } from './components/AccountSwitcher';
+import { Sidebar, TabId } from './components/Sidebar';
 import { ConnectionCard } from './components/ConnectionCard';
 import { FolderBrowserCard } from './components/FolderBrowserCard';
 import { UploadCard } from './components/UploadCard';
 import { GoDaddyPage } from './components/GoDaddyPage';
 import { ConfirmationModal } from './components/ConfirmationModal';
-import { SftpCredentials, FolderEntry, ActivePage } from './types';
+import { SftpCredentials, FolderEntry } from './types';
+import { ShieldAlert, ArrowRight } from 'lucide-react';
 
 interface ModalState {
   isOpen: boolean;
@@ -14,7 +15,8 @@ interface ModalState {
 }
 
 function App() {
-  const [activePage, setActivePage] = useState<ActivePage>('hostinger');
+  const [activeTab, setActiveTab] = useState<TabId>('hostinger-browser');
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // ── Hostinger credentials ──
   const HOSTINGER_PRESET: Partial<SftpCredentials> = {
@@ -49,6 +51,7 @@ function App() {
   });
 
   const [folders, setFolders] = useState<FolderEntry[]>([]);
+  const [gdFolders, setGdFolders] = useState<FolderEntry[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Modal State
@@ -82,16 +85,15 @@ function App() {
     handleRefresh();
   }, [handleRefresh]);
 
-  return (
-    <div className="min-h-screen bg-background py-6 px-4 sm:px-6">
-      <div className="max-w-6xl mx-auto space-y-4">
-        {/* ── Top Row: Account Switcher + Connection ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 items-stretch">
-          <AccountSwitcher
-            activePage={activePage}
-            onSwitch={setActivePage}
-          />
-          {activePage === 'hostinger' && (
+  const hostingerConnected = credentials.host !== '' && credentials.user !== '';
+  const godaddyConnected = gdCredentials.host !== '' && gdCredentials.user !== '';
+
+  const renderContent = () => {
+    // ── HOSTINGER TABS ──
+    if (activeTab.startsWith('hostinger-')) {
+      if (activeTab === 'hostinger-settings') {
+        return (
+          <div className="card-enter max-w-2xl mx-auto py-4">
             <ConnectionCard
               credentials={credentials}
               onChange={setCredentials}
@@ -99,8 +101,66 @@ function App() {
               onPreset={fillHostingerPreset}
               presetLabel="Load Hostinger"
             />
-          )}
-          {activePage === 'godaddy' && (
+          </div>
+        );
+      }
+
+      // Check if Hostinger is configured for browser/upload tabs
+      if (!hostingerConnected) {
+        return (
+          <div className="card-enter flex flex-col items-center justify-center text-center p-8 py-16 bg-card border border-taupe-200 rounded-2xl max-w-xl mx-auto shadow-sm my-8">
+            <div className="w-14 h-14 rounded-full bg-taupe-100 flex items-center justify-center mb-4 text-primary">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <h2 className="text-xl font-bold text-text mb-2">Hostinger SFTP Connection Required</h2>
+            <p className="text-sm text-text-muted max-w-md mb-6">
+              You must load or enter your Hostinger SFTP credentials in settings to browse files or upload folders.
+            </p>
+            <button
+              onClick={() => setActiveTab('hostinger-settings')}
+              className="bg-primary hover:bg-primary-hover text-white font-bold text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 transition-colors shadow-sm"
+            >
+              Configure Connection Settings
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      }
+
+      if (activeTab === 'hostinger-browser') {
+        return (
+          <div className="card-enter">
+            <FolderBrowserCard
+              credentials={credentials}
+              folders={folders}
+              setFolders={setFolders}
+              onConfirmDelete={confirmDelete}
+              refreshTrigger={refreshTrigger}
+            />
+          </div>
+        );
+      }
+
+      if (activeTab === 'hostinger-upload') {
+        return (
+          <div className="card-enter max-w-3xl mx-auto">
+            <UploadCard
+              credentials={credentials}
+              folders={folders}
+              onUploadSuccess={handleRefresh}
+            />
+          </div>
+        );
+      }
+    }
+
+    // ── GO DADDY TABS ──
+    if (activeTab.startsWith('godaddy-')) {
+      const activeSubTab = activeTab.replace('godaddy-', '') as 'browser' | 'upload' | 'settings';
+
+      if (activeSubTab === 'settings') {
+        return (
+          <div className="card-enter max-w-2xl mx-auto py-4">
             <ConnectionCard
               credentials={gdCredentials}
               onChange={setGdCredentials}
@@ -109,33 +169,79 @@ function App() {
               presetLabel="Load GoDaddy"
               label="Go Daddy"
             />
-          )}
-        </div>
+          </div>
+        );
+      }
 
-        {/* ── Content Area ── */}
-        {activePage === 'hostinger' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,65fr)_minmax(0,35fr)] gap-4 items-start">
-            <FolderBrowserCard
-              credentials={credentials}
-              folders={folders}
-              setFolders={setFolders}
-              onConfirmDelete={confirmDelete}
-              refreshTrigger={refreshTrigger}
-            />
+      // Check if GoDaddy is configured
+      if (!godaddyConnected) {
+        return (
+          <div className="card-enter flex flex-col items-center justify-center text-center p-8 py-16 bg-card border border-taupe-200 rounded-2xl max-w-xl mx-auto shadow-sm my-8">
+            <div className="w-14 h-14 rounded-full bg-taupe-100 flex items-center justify-center mb-4 text-primary">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <h2 className="text-xl font-bold text-text mb-2">GoDaddy SFTP Connection Required</h2>
+            <p className="text-sm text-text-muted max-w-md mb-6">
+              Please enter your GoDaddy SFTP server details in the Connection Settings tab first to start managing files.
+            </p>
+            <button
+              onClick={() => setActiveTab('godaddy-settings')}
+              className="bg-primary hover:bg-primary-hover text-white font-bold text-sm px-5 py-2.5 rounded-xl flex items-center gap-2 transition-colors shadow-sm"
+            >
+              Configure Connection Settings
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      }
+
+      if (activeSubTab === 'upload') {
+        return (
+          <div className="card-enter max-w-3xl mx-auto">
             <UploadCard
-              credentials={credentials}
-              folders={folders}
+              credentials={gdCredentials}
+              folders={gdFolders}
               onUploadSuccess={handleRefresh}
+              serviceType="godaddy"
             />
           </div>
-        ) : (
+        );
+      }
+
+      return (
+        <div className="card-enter">
           <GoDaddyPage
             credentials={gdCredentials}
+            folders={gdFolders}
+            setFolders={setGdFolders}
             onConfirmDelete={confirmDelete}
             refreshTrigger={refreshTrigger}
           />
-        )}
-      </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+      {/* ── Left Sidebar ── */}
+      <Sidebar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        hostingerConnected={hostingerConnected}
+        godaddyConnected={godaddyConnected}
+        isOpen={isMobileSidebarOpen}
+        onToggleMobile={() => setIsMobileSidebarOpen(prev => !prev)}
+      />
+
+      {/* ── Main Workspace ── */}
+      <main className="flex-1 min-w-0 py-6 px-4 sm:px-6 lg:px-8 mt-14 lg:mt-0 overflow-y-auto h-screen">
+        <div className="max-w-6xl mx-auto">
+          {renderContent()}
+        </div>
+      </main>
 
       <ConfirmationModal
         isOpen={modalState.isOpen}

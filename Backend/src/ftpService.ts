@@ -41,7 +41,10 @@ function buildPublicUrl(credentials: SftpCredentials, folder: string, filename: 
   const domain = credentials.domain.trim();
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
   const cleanFolder = folder.replace(/[^a-zA-Z0-9_-]/g, "");
-  return `https://${cleanDomain}/uploads/${cleanFolder}/${encodeURIComponent(filename)}`;
+  
+  // filename might contain slashes. Split and encode each part, then join back with slashes
+  const pathParts = filename.split('/').map(part => encodeURIComponent(part));
+  return `https://${cleanDomain}/uploads/${cleanFolder}/${pathParts.join('/')}`;
 }
 
 /**
@@ -51,7 +54,8 @@ function buildPublicUrl(credentials: SftpCredentials, folder: string, filename: 
  */
 export async function uploadFiles(
   credentials: SftpCredentials,
-  files: Express.Multer.File[]
+  files: Express.Multer.File[],
+  relativePaths?: string[]
 ): Promise<string[]> {
   const folder = credentials.folder ?? "uploads";
   const client = await createSftpClient(credentials);
@@ -65,16 +69,30 @@ export async function uploadFiles(
 
     const urls: string[] = [];
 
-    for (const file of files) {
-      const ext = path.posix.extname(file.originalname);
-      const baseName = path.posix.basename(file.originalname, ext);
-      const remoteFilename = `${baseName}_${Date.now()}${ext}`;
-      const remotePath = path.posix.join(remoteDir, remoteFilename);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const relPath = relativePaths && relativePaths[i] ? relativePaths[i] : file.originalname;
+      const safeRelPath = relPath.replace(/\.\./g, "").replace(/^\//, "");
+
+      let finalRelPath = safeRelPath;
+      // If it is a flat file upload (no folder hierarchy), apply unique naming to avoid conflicts
+      if (!relPath.includes('/')) {
+        const ext = path.posix.extname(file.originalname);
+        const baseName = path.posix.basename(file.originalname, ext);
+        const remoteFilename = `${baseName}_${Date.now()}${ext}`;
+        finalRelPath = remoteFilename;
+      }
+
+      const remotePath = path.posix.join(remoteDir, finalRelPath);
+      const remoteFileDir = path.posix.dirname(remotePath);
+
+      // Ensure directory for this file exists
+      await client.mkdir(remoteFileDir, true);
 
       // Upload from the buffer stored on disk by multer
       await client.put(file.path, remotePath);
 
-      urls.push(buildPublicUrl(credentials, folder, remoteFilename));
+      urls.push(buildPublicUrl(credentials, folder, finalRelPath));
     }
 
     return urls;

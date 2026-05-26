@@ -129,6 +129,8 @@ const ACCEPTED_FILE_TYPES = [
 // ─── Props ───────────────────────────────────────────────
 interface Props {
   credentials: SftpCredentials;
+  folders: FolderEntry[];
+  setFolders: (f: FolderEntry[]) => void;
   onConfirmDelete: (message: string, action: () => void) => void;
   refreshTrigger: number;
 }
@@ -139,6 +141,8 @@ const AUTO_SCROLL_SPEED = 8;
 
 export const GoDaddyPage: React.FC<Props> = ({
   credentials,
+  folders,
+  setFolders,
   onConfirmDelete,
   refreshTrigger,
 }) => {
@@ -147,7 +151,6 @@ export const GoDaddyPage: React.FC<Props> = ({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [folders, setFolders] = useState<FolderEntry[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);

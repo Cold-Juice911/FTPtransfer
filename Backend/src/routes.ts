@@ -79,10 +79,20 @@ const upload = multer({
       "video/mpeg",
       "video/3gpp",
     ];
+    const allowedExtensions = [
+      ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".tiff", ".ico", ".avif",
+      ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv",
+      ".mp4", ".avi", ".mov", ".wmv", ".mkv", ".webm", ".mpeg", ".3gp",
+      ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a",
+      ".zip", ".rar", ".7z"
+    ];
+    const ext = path.extname(file.originalname).toLowerCase();
+
     if (
       allowedMimeTypes.includes(file.mimetype) ||
       file.mimetype.startsWith("video/") ||
-      file.mimetype.startsWith("image/")
+      file.mimetype.startsWith("image/") ||
+      allowedExtensions.includes(ext)
     ) {
       cb(null, true);
     } else {
@@ -131,10 +141,20 @@ const gdUpload = multer({
       "application/zip", "application/x-rar-compressed",
       "application/x-7z-compressed",
     ];
+    const allowedExtensions = [
+      ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".tiff", ".ico", ".avif",
+      ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv",
+      ".mp4", ".avi", ".mov", ".wmv", ".mkv", ".webm", ".mpeg", ".3gp",
+      ".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a",
+      ".zip", ".rar", ".7z"
+    ];
+    const ext = path.extname(file.originalname).toLowerCase();
+
     if (
       allowedMimeTypes.includes(file.mimetype) ||
       file.mimetype.startsWith("video/") ||
-      file.mimetype.startsWith("image/")
+      file.mimetype.startsWith("image/") ||
+      allowedExtensions.includes(ext)
     ) {
       cb(null, true);
     } else {
@@ -170,7 +190,7 @@ function extractCredentials(body: Record<string, string>): SftpCredentials | nul
 router.post(
   "/upload",
   (req: Request, res: Response, next: Function) => {
-    upload.array("files", 20)(req, res, (err: any) => {
+    upload.array("files", 1000)(req, res, (err: any) => {
       if (err) {
         const message = err instanceof multer.MulterError
           ? `Upload error: ${err.message}`
@@ -183,7 +203,7 @@ router.post(
   },
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const body = req.body as Record<string, string>;
+      const body = req.body as Record<string, any>;
       const credentials = extractCredentials(body);
 
       if (!credentials || !credentials.folder) {
@@ -205,7 +225,14 @@ router.post(
         return;
       }
 
-      const urls = await uploadFiles(credentials, files);
+      const relativePathsInput = body.relativePaths;
+      const relativePaths: string[] = Array.isArray(relativePathsInput)
+        ? relativePathsInput
+        : typeof relativePathsInput === "string"
+        ? [relativePathsInput]
+        : [];
+
+      const urls = await uploadFiles(credentials, files, relativePaths);
 
       // Clean up temp files
       for (const file of files) {
@@ -441,10 +468,10 @@ router.patch("/file", async (req: Request, res: Response): Promise<void> => {
  */
 router.post(
   "/godaddy/upload",
-  gdUpload.array("files", 20),
+  gdUpload.array("files", 1000),
   async (req: Request, res: Response): Promise<void> => {
     try {
-      const body = req.body as Record<string, string>;
+      const body = req.body as Record<string, any>;
       const credentials = extractCredentials(body);
 
       if (!credentials || !credentials.folder) {
@@ -466,7 +493,14 @@ router.post(
         return;
       }
 
-      const urls = await gdUploadFiles(credentials, files);
+      const relativePathsInput = body.relativePaths;
+      const relativePaths: string[] = Array.isArray(relativePathsInput)
+        ? relativePathsInput
+        : typeof relativePathsInput === "string"
+        ? [relativePathsInput]
+        : [];
+
+      const urls = await gdUploadFiles(credentials, files, relativePaths);
 
       for (const file of files) {
         fs.unlink(file.path, () => {});

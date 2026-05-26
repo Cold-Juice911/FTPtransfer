@@ -41,7 +41,9 @@ function getRemoteDir(folder: string): string {
 function buildPublicUrl(credentials: SftpCredentials, folder: string, filename: string): string {
   const domain = credentials.domain.trim();
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  return `https://${cleanDomain}/uploads/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}`;
+  const folderParts = folder.split('/').map(part => encodeURIComponent(part)).join('/');
+  const fileParts = filename.split('/').map(part => encodeURIComponent(part)).join('/');
+  return `https://${cleanDomain}/uploads/${folderParts}/${fileParts}`;
 }
 
 /**
@@ -82,7 +84,8 @@ async function getUniqueFilename(
  */
 export async function uploadFiles(
   credentials: SftpCredentials,
-  files: Express.Multer.File[]
+  files: Express.Multer.File[],
+  relativePaths?: string[]
 ): Promise<string[]> {
   const folder = credentials.folder ?? "uploads";
   const client = await createSftpClient(credentials);
@@ -96,13 +99,27 @@ export async function uploadFiles(
 
     const urls: string[] = [];
 
-    for (const file of files) {
-      const remoteFilename = await getUniqueFilename(client, remoteDir, file.originalname);
-      const remotePath = path.posix.join(remoteDir, remoteFilename);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const relPath = relativePaths && relativePaths[i] ? relativePaths[i] : file.originalname;
+      const safeRelPath = relPath.replace(/\.\./g, "").replace(/^\//, "");
+
+      let finalRelPath = safeRelPath;
+      // For flat file uploads, we can use the file-explorer-style unique filename!
+      if (!relPath.includes('/')) {
+        const remoteFilename = await getUniqueFilename(client, remoteDir, file.originalname);
+        finalRelPath = remoteFilename;
+      }
+
+      const remotePath = path.posix.join(remoteDir, finalRelPath);
+      const remoteFileDir = path.posix.dirname(remotePath);
+
+      // Ensure directory exists
+      await client.mkdir(remoteFileDir, true);
 
       await client.put(file.path, remotePath);
 
-      urls.push(buildPublicUrl(credentials, folder, remoteFilename));
+      urls.push(buildPublicUrl(credentials, folder, finalRelPath));
     }
 
     return urls;
@@ -136,6 +153,7 @@ export async function listFiles(
         name: item.name,
         url: buildPublicUrl(credentials, folder, item.name),
         size: item.size,
+        modifiedAt: item.modifyTime ?? 0,
       }));
 
     return files;
